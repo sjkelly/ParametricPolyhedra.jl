@@ -1,6 +1,6 @@
 module ParametricPolyhedra
 
-export ParametricTriangle, edges
+export ParametricTriangle, edges, @parameterize
 
 type ParametricTriangle{T}
     # edge lengths
@@ -125,5 +125,62 @@ function Base.fill(p::ParametricTriangle)
     # otherwise we broke it ... TODO remove once we start using this in loops
     error("filling triangle failed! What did you do???")
 end
+
+function implicit_triangle(a,b,c,alpha,beta,gamma)
+    r = a*b*c/sqrt((a+b+c)*(a-b+c)*(a+b-c)*(b+c-a))
+    min(sin(alpha)/a - 2r,
+        sin(beta)/b - 2r,
+        sin(gamma)/c - 2r)
+end
+
+"""
+Find the value closest to zero and return the linear index of the element.
+"""
+function find_zeros{T}(mat::Array{T})
+    x = typemax(T)
+    ind = 0
+    # find the value closest to zero
+    @inbounds for i = 1:length(mat)
+        val = abs(mat[i])
+        if val < x
+            ind = i
+            x = val
+        end
+    end
+    ind
+end
+
+macro parameterize(ex::Expr)
+    if ex.head == :call && ex.args[1] == :ParametricTriangle
+        vals = ex.args[2:7]
+        blk = Expr(:block)
+
+        # create the anonymous function
+        f = gensym() # this is our anonymous function
+        anon = Expr(:(=), Expr(:call, f, v), Expr(:call, :implicit_triangle))
+        tri_call = anon.args[2]
+        var_ct = 1
+        for v in vals
+            if typeof(v) <: Number
+                push!(tri_call, v)
+            elseif typeof(v) <: Symbol
+                push!(tri_call, Expr(:ref, :v, var_ct))
+                var_ct += 1
+            else
+                error("unsupported type")
+            end
+        end
+        push!(blk, anon)
+
+        n = count(x -> x <: Symbol, val)
+
+        h = HyperRectangle{n, Float64}(Vec{n,Float64}(0.1), Vec{n,Float64}(pi*1.0))
+        s = gensym() #sdf
+        push!(blk, Expr(:=, s, SignedDistanceField(f, h
+    else
+        error("cannot @parameterize this call")
+    end
+end
+
 
 end # module
